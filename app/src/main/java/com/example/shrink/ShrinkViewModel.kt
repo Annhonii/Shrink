@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.shrink.engine.Engine
 import com.example.shrink.engine.Kind
+import com.example.shrink.engine.OutFormat
 import com.example.shrink.engine.Shrunk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -28,13 +29,19 @@ class ShrinkViewModel(app: Application) : AndroidViewModel(app) {
 
     var source by mutableStateOf<Source?>(null); private set
     var phase by mutableStateOf<Phase>(Phase.Idle); private set
-    var targetText by mutableStateOf("200")
-    var unitMb by mutableStateOf(false)
+    var targetText by mutableStateOf("200"); private set
+    var unitMb by mutableStateOf(false); private set
+    var format by mutableStateOf(OutFormat.JPG); private set
 
     val targetBytes: Long
         get() = ((targetText.toDoubleOrNull() ?: 0.0) * if (unitMb) 1_048_576.0 else 1024.0).toLong()
 
-    fun setTarget(value: String, mb: Boolean) { targetText = value; unitMb = mb }
+    // Any change to the inputs makes an old result stale, so drop it.
+    private fun invalidate() { if (phase is Phase.Done || phase is Phase.Failed) phase = Phase.Idle }
+
+    fun onTargetText(v: String) { targetText = v.filter { it.isDigit() || it == '.' }.take(7); invalidate() }
+    fun onUnit(mb: Boolean) { unitMb = mb; invalidate() }
+    fun onFormat(f: OutFormat) { format = f; invalidate() }
 
     fun pick(uri: Uri?) {
         uri ?: return
@@ -54,6 +61,12 @@ class ShrinkViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             source = Source(uri, name, size, kind, mime)
+            // Default the output to the photo's own format.
+            format = when (mime) {
+                "image/png" -> OutFormat.PNG
+                "image/webp" -> OutFormat.WEBP
+                else -> OutFormat.JPG
+            }
             phase = Phase.Idle
         }
     }
@@ -62,10 +75,11 @@ class ShrinkViewModel(app: Application) : AndroidViewModel(app) {
         val s = source ?: return
         val t = targetBytes
         if (t < 5 * 1024) { phase = Phase.Failed("Target must be at least 5 KB."); return }
+        val f = format
         phase = Phase.Working
         viewModelScope.launch(Dispatchers.Default) {
             phase = try {
-                Phase.Done(Engine.compress(cr, s.uri, s.kind, s.mime, s.bytes, t))
+                Phase.Done(Engine.compress(cr, s.uri, s.kind, s.mime, s.bytes, t, f))
             } catch (e: Throwable) {
                 Phase.Failed(e.message ?: "Couldn't process this file.")
             }
@@ -77,11 +91,11 @@ class ShrinkViewModel(app: Application) : AndroidViewModel(app) {
         val s = source ?: return
         viewModelScope.launch(Dispatchers.IO) {
             val name = s.name.substringBeforeLast('.') + "_shrunk." + d.shrunk.ext
-            try {
+            phase = try {
                 Engine.saveToDownloads(cr, name, d.shrunk.mime, d.shrunk.bytes)
-                phase = d.copy(savedAs = name)
+                d.copy(savedAs = name)
             } catch (e: Throwable) {
-                phase = Phase.Failed("Couldn't save: ${e.message}")
+                Phase.Failed("Couldn't save: ${e.message}")
             }
         }
     }
