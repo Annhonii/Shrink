@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # needed to create the release
+  contents: write
 
 jobs:
   release:
@@ -20,21 +20,15 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      # Provides `gradle` on PATH when the repo has no gradlew.
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.9
 
-      # Optional: sign with your own key (repo secrets) so new builds install over old ones.
       - name: Restore signing key
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
-          fi
-
+          if [ -n "$KEYSTORE_BASE64" ]
       - name: Build release APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
