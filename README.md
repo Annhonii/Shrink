@@ -1,4 +1,4 @@
-# ⚡ Minimal Media Lab (or YourAppName)
+# ⚡ Shrinky
 
 A featherlight, distraction-free utility designed to compress, crop, and convert images and PDFs without breaking a sweat. Built with a sleek design language inspired by Google Pixel’s Material You and Nothing OS minimalism.
 
@@ -46,15 +46,15 @@ A featherlight, distraction-free utility designed to compress, crop, and convert
 ## 🚀 Getting Started
 
 ### Installation
-1. Head over to the [Releases](https://github.com/yourusername/yourrepo/releases) tab.
-2. Download the latest `.apk` (under 2 MB).
+1. Head over to the [Releases](https://github.com/yourusername/shrinky/releases) tab.
+2. Download the latest `Shrinky.apk` (under 2 MB).
 3. Install and run directly on your Android device.
 
 ### Building from Source
 ```bash
 # Clone the repository
-git clone [https://github.com/yourusername/yourrepo.git](https://github.com/yourusername/yourrepo.git)
-cd yourrepo
+git clone [https://github.com/yourusername/shrinky.git](https://github.com/yourusername/shrinky.git)
+cd shrinky
 
 # Open in Android Studio or build via CLI
 ./gradlew assembleRelease
