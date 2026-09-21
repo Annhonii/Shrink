@@ -20,11 +20,6 @@ A featherlight, distraction-free utility designed to compress, crop, and convert
 
 ## 📸 Screenshots
 
-| Clean Dashboard | Custom Crop & Resize | Compression Engine |
-|:---:|:---:|:---:|
-| *(Add your dashboard screenshot)* | *(Add your cropping screenshot)* | *(Add your compression screenshot)* |
-
----
 
 ## 🛠️ Feature Breakdown
 
@@ -50,11 +45,3 @@ A featherlight, distraction-free utility designed to compress, crop, and convert
 2. Download the latest `Shrinky.apk` (under 2 MB).
 3. Install and run directly on your Android device.
 
-### Building from Source
-```bash
-# Clone the repository
-git clone [https://github.com/yourusername/shrinky.git](https://github.com/yourusername/shrinky.git)
-cd shrinky
-
-# Open in Android Studio or build via CLI
-./gradlew assembleRelease
