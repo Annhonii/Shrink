@@ -61,7 +61,7 @@ jobs:
           NOTES: ${{ github.event.head_commit.message }}
         run: |
           gh release create "build-${{ github.run_number }}" shrinky.apk \
-            --title "Shrinky build ${{ github.run_number }}" \
+            --title "Shrinky \
             --notes "${NOTES:-Automated build}" \
             --target "${{ github.sha }}" \
             --latest
