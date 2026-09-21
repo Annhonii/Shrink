@@ -3,6 +3,7 @@ package com.davexh.shrinky.ui
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -52,6 +53,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -87,6 +89,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.davexh.shrinky.engine.Saver
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -413,10 +416,31 @@ fun SlidingSegments(
     }
 }
 
+/** Segmented pill: tap a segment, or grab the thumb and slide it (it settles on the nearest segment with a bounce). */
 @Composable
 fun Segmented(options: List<String>, selected: Int, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
-    val pos by animateFloatAsState(selected.toFloat(), spring(dampingRatio = 0.65f, stiffness = 420f), label = "segments")
-    SlidingSegments(options, pos, modifier, onTap = onSelect)
+    val scope = rememberCoroutineScope()
+    val spec = spring<Float>(dampingRatio = 0.65f, stiffness = 420f)
+    val anim = remember { Animatable(selected.toFloat()) }
+    var drag by remember { mutableStateOf<Float?>(null) }
+    val last = options.size - 1
+    LaunchedEffect(selected) { anim.animateTo(selected.toFloat(), spec) }
+
+    SlidingSegments(
+        labels = options,
+        position = drag ?: anim.value,
+        modifier = modifier,
+        onTap = { onSelect(it) },
+        onDrag = { f -> drag = ((drag ?: anim.value) + f).coerceIn(0f, last.toFloat()) },
+        onRelease = {
+            val d = drag
+            if (d != null) {
+                val idx = d.roundToInt().coerceIn(0, last)
+                scope.launch { anim.snapTo(d); drag = null; anim.animateTo(idx.toFloat(), spec) }
+                if (idx != selected) onSelect(idx)
+            }
+        },
+    )
 }
 
 @Composable

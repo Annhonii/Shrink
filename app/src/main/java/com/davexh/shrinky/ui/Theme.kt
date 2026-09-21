@@ -58,18 +58,18 @@ val LightPalette = Palette(
     field = Color(0xFFF4F4F4), fieldStroke = Color(0xFFC4C4C4), disabled = Color(0xFFDCDCDC),
 )
 
-/** Surfaces come from the wallpaper (Monet); the red signal dot stays. */
+/** Page + accents come from the wallpaper (Monet); the cards stay black (white in light mode). */
 @RequiresApi(31)
 private fun monet(ctx: Context, dark: Boolean): Palette {
     fun c(id: Int) = Color(ctx.getColor(id))
     return if (dark) {
         Palette(
             bg = c(android.R.color.system_neutral1_900),
-            card = c(android.R.color.system_neutral1_800),
-            stroke = c(android.R.color.system_neutral1_700),
+            card = Color(0xFF000000),
+            stroke = c(android.R.color.system_neutral1_800),
             text = c(android.R.color.system_neutral1_50),
             mute = c(android.R.color.system_neutral1_400),
-            dotOff = c(android.R.color.system_neutral1_700),
+            dotOff = c(android.R.color.system_neutral1_800),
             dotOn = c(android.R.color.system_accent1_200),
             primary = c(android.R.color.system_accent1_200),
             onPrimary = c(android.R.color.system_accent1_900),
@@ -81,7 +81,7 @@ private fun monet(ctx: Context, dark: Boolean): Palette {
     } else {
         Palette(
             bg = c(android.R.color.system_neutral1_50),
-            card = c(android.R.color.system_neutral1_10),
+            card = c(android.R.color.system_neutral1_0),
             stroke = c(android.R.color.system_neutral1_100),
             text = c(android.R.color.system_neutral1_900),
             mute = c(android.R.color.system_neutral1_600),

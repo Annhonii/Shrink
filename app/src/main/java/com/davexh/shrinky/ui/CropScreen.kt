@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -46,7 +47,7 @@ fun CropScreen(vm: CropVm, pickFolder: () -> Unit) {
         bar = {
             ActionBar(
                 busy = vm.busy, hasResult = result != null, savedAs = vm.save.savedAs,
-                primary = "Crop", primaryEnabled = src != null && (vm.mode == 1 || (w > 0 && h > 0)),
+                primary = "Crop", primaryEnabled = src != null && (if (vm.mode == 1) vm.ratioValid else (w > 0 && h > 0)),
                 onPrimary = vm::crop, onSave = vm::saveResult,
             )
         },
@@ -80,7 +81,20 @@ fun CropScreen(vm: CropVm, pickFolder: () -> Unit) {
                             Field(vm.hText, vm::onH, "Height", Modifier.weight(1f), keyboard = KeyboardType.Number, style = Type.title)
                         }
                     } else {
-                        ChipRow(CROP_RATIOS.map { "${it.first}:${it.second}" }, vm.ratio) { vm.onRatio(it) }
+                        Column {
+                            ChipRow(CROP_RATIOS.map { "${it.first}:${it.second}" } + "Custom", vm.ratio) { vm.onRatio(it) }
+                            Reveal(vm.ratio == CROP_RATIOS.size) {
+                                Row(
+                                    Modifier.padding(top = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    Field(vm.customW, vm::onCustomW, "Width", Modifier.weight(1f), keyboard = KeyboardType.Number, style = Type.title)
+                                    Text(":", color = p.mute, style = Type.title)
+                                    Field(vm.customH, vm::onCustomH, "Height", Modifier.weight(1f), keyboard = KeyboardType.Number, style = Type.title)
+                                }
+                            }
+                        }
                     }
                 }
             }

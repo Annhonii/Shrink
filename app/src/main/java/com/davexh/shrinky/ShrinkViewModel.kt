@@ -135,20 +135,31 @@ class CropVm(app: Application) : BaseVm(app) {
     var wText by mutableStateOf(""); private set
     var hText by mutableStateOf(""); private set
     var mode by mutableIntStateOf(0); private set      // 0 = exact size, 1 = aspect ratio
-    var ratio by mutableIntStateOf(0); private set
+    var ratio by mutableIntStateOf(0); private set       // index into CROP_RATIOS; CROP_RATIOS.size = custom
+    var customW by mutableStateOf(""); private set
+    var customH by mutableStateOf(""); private set
     var format by mutableStateOf(OutFormat.JPG); private set
     var result by mutableStateOf<CropResult?>(null); private set
+
+    private fun ratioPair(): Pair<Int, Int> =
+        if (ratio < CROP_RATIOS.size) CROP_RATIOS[ratio]
+        else (customW.toIntOrNull() ?: 0) to (customH.toIntOrNull() ?: 0)
+
+    val ratioValid: Boolean
+        get() { val (a, b) = ratioPair(); return a > 0 && b > 0 }
 
     private fun refreshAspect() {
         result = null; failure = null
         if (mode == 0) editor.setAspect(wText.toIntOrNull() ?: 0, hText.toIntOrNull() ?: 0)
-        else editor.setAspect(CROP_RATIOS[ratio].first, CROP_RATIOS[ratio].second)
+        else { val (a, b) = ratioPair(); editor.setAspect(a, b) }
     }
 
     fun onW(v: String) { wText = v.filter { it.isDigit() }.take(4); refreshAspect() }
     fun onH(v: String) { hText = v.filter { it.isDigit() }.take(4); refreshAspect() }
     fun onMode(m: Int) { mode = m; refreshAspect() }
     fun onRatio(i: Int) { ratio = i; refreshAspect() }
+    fun onCustomW(v: String) { customW = v.filter { it.isDigit() }.take(3); refreshAspect() }
+    fun onCustomH(v: String) { customH = v.filter { it.isDigit() }.take(3); refreshAspect() }
     fun onFormat(f: OutFormat) { format = f; result = null; failure = null }
 
     fun pick(uri: Uri?) {
@@ -174,7 +185,7 @@ class CropVm(app: Application) : BaseVm(app) {
         val bmp = editor.image ?: return
         val rect = editor.sourceRect()
         if (rect == null) {
-            failure = if (mode == 0) "Enter a width and height first." else "Pick a ratio first."
+            failure = if (mode == 0) "Enter a width and height first." else "Pick or enter a ratio first."
             return
         }
         // Size mode: exactly what was typed. Ratio mode: the framed area at its own resolution.
