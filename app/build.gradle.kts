@@ -52,6 +52,7 @@ android {
     }
 }
 
+
 // No Material library on purpose: the UI is built on foundation only to keep the APK small.
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
