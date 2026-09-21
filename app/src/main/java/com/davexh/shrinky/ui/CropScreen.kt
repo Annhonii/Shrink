@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -81,19 +80,14 @@ fun CropScreen(vm: CropVm, pickFolder: () -> Unit) {
                             Field(vm.hText, vm::onH, "Height", Modifier.weight(1f), keyboard = KeyboardType.Number, style = Type.title)
                         }
                     } else {
-                        Column {
-                            ChipRow(CROP_RATIOS.map { "${it.first}:${it.second}" } + "Custom", vm.ratio) { vm.onRatio(it) }
-                            Reveal(vm.ratio == CROP_RATIOS.size) {
-                                Row(
-                                    Modifier.padding(top = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                ) {
-                                    Field(vm.customW, vm::onCustomW, "Width", Modifier.weight(1f), keyboard = KeyboardType.Number, style = Type.title)
-                                    Text(":", color = p.mute, style = Type.title)
-                                    Field(vm.customH, vm::onCustomH, "Height", Modifier.weight(1f), keyboard = KeyboardType.Number, style = Type.title)
-                                }
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            // Custom ratio first; the chips below just fill it in.
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Field(vm.customW, vm::onCustomW, "Width", Modifier.weight(1f), keyboard = KeyboardType.Number, style = Type.title)
+                                Text(":", color = p.mute, style = Type.title)
+                                Field(vm.customH, vm::onCustomH, "Height", Modifier.weight(1f), keyboard = KeyboardType.Number, style = Type.title)
                             }
+                            ChipRow(CROP_RATIOS.map { "${it.first}:${it.second}" }, vm.ratio) { vm.onRatio(it) }
                         }
                     }
                 }

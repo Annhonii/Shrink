@@ -15,13 +15,25 @@ android {
         versionName = "0.3"
         resourceConfigurations += listOf("en")
     }
+    // Stable signing key for CI releases (set from repo secrets by the workflow). Without it, the debug key is used.
+    val ciKeystore: String? = System.getenv("KEYSTORE_FILE")
+    signingConfigs {
+        if (ciKeystore != null) {
+            create("ci") {
+                storeFile = file(ciKeystore)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
-            // Debug-signed so the release APK installs directly. Swap for your own key when publishing.
-            signingConfig = signingConfigs.getByName("debug")
+            // CI key when provided, otherwise the debug key so the APK still installs directly.
+            signingConfig = signingConfigs.findByName("ci") ?: signingConfigs.getByName("debug")
         }
     }
     buildFeatures { compose = true }
