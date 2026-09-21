@@ -1,27 +1,29 @@
-package com.example.shrink
+package com.davexh.shrinky
 
 import android.app.Application
 import android.content.ContentResolver
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.shrink.engine.CropState
-import com.example.shrink.engine.Engine
-import com.example.shrink.engine.Images
-import com.example.shrink.engine.Kind
-import com.example.shrink.engine.OutFormat
-import com.example.shrink.engine.PdfMaker
-import com.example.shrink.engine.Saver
-import com.example.shrink.engine.Shrunk
-import com.example.shrink.engine.queryMeta
+import com.davexh.shrinky.engine.CropState
+import com.davexh.shrinky.engine.Engine
+import com.davexh.shrinky.engine.Images
+import com.davexh.shrinky.engine.Kind
+import com.davexh.shrinky.engine.OutFormat
+import com.davexh.shrinky.engine.PdfMaker
+import com.davexh.shrinky.engine.Saver
+import com.davexh.shrinky.engine.Shrunk
+import com.davexh.shrinky.engine.queryMeta
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 /** File name + "was it saved" state shared by every tool. */
 class SaveState {
@@ -65,7 +67,7 @@ data class Source(val uri: Uri, val name: String, val bytes: Long, val kind: Kin
 class ShrinkVm(app: Application) : BaseVm(app) {
     var source by mutableStateOf<Source?>(null); private set
     var result by mutableStateOf<Shrunk?>(null); private set
-    var targetText by mutableStateOf("200"); private set
+    var targetText by mutableStateOf(""); private set
     var unitMb by mutableStateOf(false); private set
     var format by mutableStateOf(OutFormat.JPG); private set
 
@@ -124,21 +126,29 @@ class CropSource(val name: String, val origW: Int, val origH: Int)
 
 class CropResult(val bytes: ByteArray, val ext: String, val mime: String, val w: Int, val h: Int, val preview: Bitmap)
 
+/** Ratio presets for the crop tool (width : height). */
+val CROP_RATIOS = listOf(1 to 1, 4 to 5, 3 to 4, 2 to 3, 9 to 16, 4 to 3, 3 to 2, 16 to 9)
+
 class CropVm(app: Application) : BaseVm(app) {
     val editor = CropState()
     var src by mutableStateOf<CropSource?>(null); private set
     var wText by mutableStateOf(""); private set
     var hText by mutableStateOf(""); private set
+    var mode by mutableIntStateOf(0); private set      // 0 = exact size, 1 = aspect ratio
+    var ratio by mutableIntStateOf(0); private set
     var format by mutableStateOf(OutFormat.JPG); private set
     var result by mutableStateOf<CropResult?>(null); private set
 
-    private fun sizeChanged() {
+    private fun refreshAspect() {
         result = null; failure = null
-        editor.setAspect(wText.toIntOrNull() ?: 0, hText.toIntOrNull() ?: 0)
+        if (mode == 0) editor.setAspect(wText.toIntOrNull() ?: 0, hText.toIntOrNull() ?: 0)
+        else editor.setAspect(CROP_RATIOS[ratio].first, CROP_RATIOS[ratio].second)
     }
 
-    fun onW(v: String) { wText = v.filter { it.isDigit() }.take(4); sizeChanged() }
-    fun onH(v: String) { hText = v.filter { it.isDigit() }.take(4); sizeChanged() }
+    fun onW(v: String) { wText = v.filter { it.isDigit() }.take(4); refreshAspect() }
+    fun onH(v: String) { hText = v.filter { it.isDigit() }.take(4); refreshAspect() }
+    fun onMode(m: Int) { mode = m; refreshAspect() }
+    fun onRatio(i: Int) { ratio = i; refreshAspect() }
     fun onFormat(f: OutFormat) { format = f; result = null; failure = null }
 
     fun pick(uri: Uri?) {
@@ -155,17 +165,24 @@ class CropVm(app: Application) : BaseVm(app) {
                 "image/webp" -> OutFormat.WEBP
                 else -> OutFormat.JPG
             }
-            result = null
             src = CropSource(name, d.origW, d.origH)
+            refreshAspect()
         }
     }
 
     fun crop() {
         val bmp = editor.image ?: return
-        val w = wText.toIntOrNull() ?: 0
-        val h = hText.toIntOrNull() ?: 0
         val rect = editor.sourceRect()
-        if (w <= 0 || h <= 0 || rect == null) { failure = "Enter a width and height first."; return }
+        if (rect == null) {
+            failure = if (mode == 0) "Enter a width and height first." else "Pick a ratio first."
+            return
+        }
+        // Size mode: exactly what was typed. Ratio mode: the framed area at its own resolution.
+        val size: Pair<Int, Int> =
+            if (mode == 0) (wText.toIntOrNull() ?: 0) to (hText.toIntOrNull() ?: 0)
+            else rect.width().roundToInt().coerceAtLeast(1) to rect.height().roundToInt().coerceAtLeast(1)
+        val (w, h) = size
+        if (w <= 0 || h <= 0) { failure = "Enter a width and height first."; return }
         if (w.toLong() * h > 25_000_000L) { failure = "Output is too large. Keep it under 25 megapixels."; return }
         val f = format
         val base = src?.name?.substringBeforeLast('.') ?: "crop"

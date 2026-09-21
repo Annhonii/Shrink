@@ -1,4 +1,4 @@
-package com.example.shrink.engine
+package com.davexh.shrinky.engine
 
 import android.content.ContentResolver
 import android.graphics.Bitmap
@@ -27,6 +27,8 @@ class Shrunk(
     val pages: Int = 0, val dpi: Int = 0,
     val before: Bitmap? = null,
     val after: Bitmap? = null,
+    val beforeZoom: Bitmap? = null,
+    val afterZoom: Bitmap? = null,
 )
 
 object Engine {
@@ -63,11 +65,15 @@ object Engine {
         val base = if (fmt == OutFormat.JPG) Images.flatten(d.bitmap) else d.bitmap
 
         fun done(bytes: ByteArray, bmp: Bitmap, hit: Boolean): Shrunk {
-            val after = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.let { Images.thumb(it) }
+            val decodedAfter = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            val zoom = decodedAfter?.let { Images.zoomPair(base, it) }
             return Shrunk(
                 bytes, fmt.mime, fmt.ext, hit,
                 origW = d.origW, origH = d.origH, newW = bmp.width, newH = bmp.height,
-                before = Images.thumb(base), after = after,
+                before = Images.thumb(base),
+                after = decodedAfter?.let { Images.thumb(it) },
+                beforeZoom = zoom?.first,
+                afterZoom = zoom?.second,
             )
         }
 

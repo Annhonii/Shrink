@@ -1,4 +1,4 @@
-package com.example.shrink.engine
+package com.davexh.shrinky.engine
 
 import android.graphics.Bitmap
 import android.graphics.RectF

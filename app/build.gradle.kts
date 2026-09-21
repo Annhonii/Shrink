@@ -5,14 +5,14 @@ plugins {
 }
 
 android {
-    namespace = "com.example.shrink"
+    namespace = "com.davexh.shrinky"
     compileSdk = 35
     defaultConfig {
-        applicationId = "com.example.shrink"
+        applicationId = "com.davexh.shrinky"
         minSdk = 29
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2"
+        versionCode = 3
+        versionName = "0.3"
         resourceConfigurations += listOf("en")
     }
     buildTypes {
@@ -45,6 +45,7 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.animation:animation")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
 }

@@ -1,4 +1,4 @@
-package com.example.shrink.ui
+package com.davexh.shrinky.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -21,7 +21,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import com.example.shrink.engine.CropState
+import com.davexh.shrinky.engine.CropState
 import kotlin.math.roundToInt
 
 /** Fixed frame over a photo you drag (move) and pinch (zoom). Whatever is inside the frame is what gets cropped. */

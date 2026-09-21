@@ -1,16 +1,28 @@
-package com.example.shrink.ui
+package com.davexh.shrinky.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,9 +30,11 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -35,11 +49,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,8 +65,12 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.onClick
@@ -63,8 +81,12 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.example.shrink.engine.Saver
+import com.davexh.shrinky.engine.Saver
+import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -84,14 +106,28 @@ fun delta(before: Double, after: Double): String {
     }
 }
 
-// ---------- press feedback (replaces clickable, which needs a Material ripple) ----------
+/** Keeps the last non-null value so exit animations still have something to draw. */
+class Holder<T>(var value: T? = null)
 
+@Composable
+fun <T : Any> rememberLast(value: T?): T? {
+    val h = remember { Holder<T>() }
+    if (value != null) h.value = value
+    return h.value
+}
+
+// ---------- motion ----------
+
+private val Bouncy = spring<Float>(dampingRatio = 0.5f, stiffness = 500f)
+
+/** Press feedback: a springy squish. Must be the OUTERMOST modifier so the whole element scales. */
 @Composable
 fun Modifier.tap(enabled: Boolean = true, action: () -> Unit): Modifier {
     var pressed by remember { mutableStateOf(false) }
     val current by rememberUpdatedState(action)
+    val scale by animateFloatAsState(if (pressed) 0.94f else 1f, Bouncy, label = "tap")
     return this
-        .graphicsLayer { alpha = if (pressed) 0.6f else 1f }
+        .graphicsLayer { scaleX = scale; scaleY = scale; alpha = if (pressed) 0.85f else 1f }
         .semantics(mergeDescendants = true) { role = Role.Button; onClick { current(); true } }
         .pointerInput(enabled) {
             if (enabled) {
@@ -103,10 +139,21 @@ fun Modifier.tap(enabled: Boolean = true, action: () -> Unit): Modifier {
         }
 }
 
+/** Springy expand + fade for sections that come and go inside the card. */
+@Composable
+fun Reveal(visible: Boolean, content: @Composable ColumnScope.() -> Unit) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(spring(stiffness = 300f)) + expandVertically(spring(dampingRatio = 0.72f, stiffness = 320f)),
+        exit = fadeOut(spring(stiffness = 500f)) + shrinkVertically(spring(stiffness = 500f)),
+    ) { Column(content = content) }
+}
+
 // ---------- layout ----------
 
+/** One card per tool. Sections inside are separated by Rule(). */
 @Composable
-fun SectionCard(title: String? = null, content: @Composable ColumnScope.() -> Unit) {
+fun SectionCard(content: @Composable ColumnScope.() -> Unit) {
     val p = LocalPalette.current
     val shape = RoundedCornerShape(28.dp)
     Column(
@@ -115,8 +162,14 @@ fun SectionCard(title: String? = null, content: @Composable ColumnScope.() -> Un
             .border(1.dp, p.stroke, shape)
             .clip(shape)
             .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
+        content = content,
+    )
+}
+
+@Composable
+fun Section(title: String? = null, content: @Composable ColumnScope.() -> Unit) {
+    val p = LocalPalette.current
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (title != null) Text(title, color = p.mute, style = Type.label)
         content()
     }
@@ -125,10 +178,10 @@ fun SectionCard(title: String? = null, content: @Composable ColumnScope.() -> Un
 @Composable
 fun Rule() {
     val p = LocalPalette.current
-    Box(Modifier.fillMaxWidth().height(1.dp).background(p.stroke))
+    Box(Modifier.padding(vertical = 16.dp).fillMaxWidth().height(1.dp).background(p.stroke))
 }
 
-/** Scrolling body + sticky action bar. Scrolls to the end whenever [scrollTo] becomes non-null/changes. */
+/** Scrolling body + sticky action bar. Scrolls to the end once [scrollTo] becomes non-null/changes. */
 @Composable
 fun ToolScaffold(
     scrollTo: Any?,
@@ -139,25 +192,25 @@ fun ToolScaffold(
     val scroll = rememberScrollState()
     LaunchedEffect(scrollTo) {
         if (scrollTo != null) {
-            withFrameNanos { }
-            scroll.animateScrollTo(scroll.maxValue)
+            delay(320) // let the result section finish expanding
+            scroll.animateScrollTo(scroll.maxValue, spring(dampingRatio = 0.85f, stiffness = 200f))
         }
     }
     Column(Modifier.fillMaxSize()) {
         Column(
             Modifier.weight(1f).verticalScroll(scroll)
                 .padding(horizontal = 20.dp).padding(top = 4.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
             content = content,
         )
         Column(
             Modifier.fillMaxWidth().background(p.bg)
                 .padding(horizontal = 20.dp).padding(top = 8.dp, bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
             content = bar,
         )
     }
 }
+
+private enum class Bar { Busy, Saved, Save, Primary }
 
 /** One primary action that follows the flow: do the thing, then Save, then Saved. */
 @Composable
@@ -171,38 +224,57 @@ fun ActionBar(
     onSave: () -> Unit,
 ) {
     val p = LocalPalette.current
-    when {
-        busy -> PillButton("Working...", enabled = false) {}
-        savedAs != null -> {
-            PillButton("Saved", enabled = false, style = PillStyle.Outlined) {}
-            Text(
-                savedAs, Modifier.fillMaxWidth(), color = p.mute, style = Type.small,
-                textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
+    val state = when {
+        busy -> Bar.Busy
+        savedAs != null -> Bar.Saved
+        hasResult -> Bar.Save
+        else -> Bar.Primary
+    }
+    AnimatedContent(
+        targetState = state,
+        modifier = Modifier.fillMaxWidth(),
+        transitionSpec = {
+            (fadeIn(spring(stiffness = 300f)) + scaleIn(spring(dampingRatio = 0.6f, stiffness = 400f), initialScale = 0.9f)) togetherWith
+                fadeOut(spring(stiffness = 600f))
+        },
+        label = "action-bar",
+    ) { s ->
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            when (s) {
+                Bar.Busy -> PillButton("Working...", enabled = false) {}
+                Bar.Saved -> {
+                    PillButton("Saved", enabled = false, style = PillStyle.Outlined) {}
+                    Text(
+                        savedAs.orEmpty(), Modifier.fillMaxWidth(), color = p.mute, style = Type.small,
+                        textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Bar.Save -> PillButton("Save") { onSave() }
+                Bar.Primary -> PillButton(primary, enabled = primaryEnabled) { onPrimary() }
+            }
         }
-        hasResult -> PillButton("Save") { onSave() }
-        else -> PillButton(primary, enabled = primaryEnabled) { onPrimary() }
     }
 }
 
 @Composable
-fun StatusCards(busy: Boolean, failure: String?) {
+fun StatusSection(busy: Boolean, failure: String?) {
     val p = LocalPalette.current
-    if (busy) {
-        SectionCard {
+    Reveal(busy || failure != null) {
+        Rule()
+        if (busy) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 WorkingDots()
                 Text("Working", color = p.mute)
             }
+        } else if (failure != null) {
+            Text(failure, color = p.accent)
         }
-    } else if (failure != null) {
-        SectionCard { Text(failure, color = p.accent) }
     }
 }
 
 @Composable
-fun SaveCard(name: String, onName: (String) -> Unit, ext: String, pickFolder: () -> Unit) {
-    SectionCard("Save as") {
+fun SaveSection(name: String, onName: (String) -> Unit, ext: String, pickFolder: () -> Unit) {
+    Section("Save as") {
         Field(name, onName, "File name", suffix = ".$ext", style = Type.title)
         PickerRow(Saver.label, "Change", pickFolder)
     }
@@ -244,14 +316,17 @@ fun PillButton(
 ) {
     val p = LocalPalette.current
     val filled = style == PillStyle.Filled
-    val bg = when { !filled -> Color.Transparent; enabled -> p.text; else -> p.disabled }
-    val fg = when { !filled -> p.text; enabled -> p.bg; else -> p.mute }
+    val bg by animateColorAsState(
+        when { !filled -> Color.Transparent; enabled -> p.primary; else -> p.disabled },
+        spring(stiffness = 400f), label = "pill-bg",
+    )
+    val fg = when { !filled -> p.text; enabled -> p.onPrimary; else -> p.mute }
     Box(
         modifier.fillMaxWidth().height(54.dp)
+            .tap(enabled) { onClick() }
             .clip(CircleShape)
             .background(bg)
             .then(if (!filled) Modifier.border(1.dp, p.fieldStroke, CircleShape) else Modifier)
-            .tap(enabled) { onClick() }
             .padding(horizontal = 24.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -259,29 +334,110 @@ fun PillButton(
     }
 }
 
+/**
+ * iOS-style segmented control. [position] is fractional (0f..n-1), so the thumb can follow a
+ * finger or a pager mid-swipe. Drag anywhere on the bar to slide the thumb.
+ */
 @Composable
-fun Segmented(options: List<String>, selected: Int, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
+fun SlidingSegments(
+    labels: List<String>,
+    position: Float,
+    modifier: Modifier = Modifier,
+    height: Dp = 44.dp,
+    onTap: (Int) -> Unit,
+    onDrag: ((Float) -> Unit)? = null,
+    onRelease: (() -> Unit)? = null,
+) {
     val p = LocalPalette.current
-    Row(
-        modifier.fillMaxWidth().clip(CircleShape).background(p.field)
-            .border(1.dp, p.fieldStroke, CircleShape).padding(4.dp),
+    val density = LocalDensity.current
+    var widthPx by remember { mutableIntStateOf(0) }
+    val padPx = with(density) { 4.dp.toPx() }
+    val n = labels.size
+    val segPx = if (widthPx > 0) (widthPx - 2 * padPx) / n else 0f
+    val segDp = with(density) { segPx.toDp() }
+    val thumbX = (position * segPx).roundToInt()
+    val totalPx = (segPx * n).roundToInt()
+
+    Box(
+        modifier.fillMaxWidth().height(height)
+            .clip(CircleShape)
+            .background(p.field)
+            .border(1.dp, p.fieldStroke, CircleShape)
+            .onSizeChanged { widthPx = it.width }
+            .pointerInput(n, segPx) {
+                detectTapGestures { o ->
+                    if (segPx > 0f) onTap(((o.x - padPx) / segPx).toInt().coerceIn(0, n - 1))
+                }
+            }
+            .then(
+                if (onDrag != null) {
+                    Modifier.pointerInput(n, segPx) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = { onRelease?.invoke() },
+                            onDragCancel = { onRelease?.invoke() },
+                        ) { change, amount ->
+                            change.consume()
+                            if (segPx > 0f) onDrag(amount / segPx)
+                        }
+                    }
+                } else Modifier,
+            ),
     ) {
-        options.forEachIndexed { i, label ->
-            val sel = i == selected
-            Box(
-                Modifier.weight(1f).clip(CircleShape)
-                    .background(if (sel) p.text else Color.Transparent)
-                    .tap { onSelect(i) }
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center,
+        Row(Modifier.fillMaxSize().padding(4.dp)) {
+            labels.forEach { l ->
+                Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                    Text(l, color = p.text, style = Type.label, maxLines = 1)
+                }
+            }
+        }
+        // The thumb, with a second copy of the labels (inverted) clipped inside it.
+        Box(
+            Modifier.padding(4.dp).fillMaxHeight().width(segDp)
+                .offset { IntOffset(thumbX, 0) }
+                .clip(CircleShape)
+                .background(p.primary),
+        ) {
+            Row(
+                Modifier.layout { measurable, constraints ->
+                    val placeable = measurable.measure(Constraints.fixed(totalPx, constraints.maxHeight))
+                    layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(-thumbX, 0) }
+                },
             ) {
-                Text(label, color = if (sel) p.bg else p.text, style = Type.label, maxLines = 1)
+                labels.forEach { l ->
+                    Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                        Text(l, color = p.onPrimary, style = Type.label, maxLines = 1)
+                    }
+                }
             }
         }
     }
 }
 
-/** Looks like an input: filled well, visible border, placeholder, red ring while focused. */
+@Composable
+fun Segmented(options: List<String>, selected: Int, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
+    val pos by animateFloatAsState(selected.toFloat(), spring(dampingRatio = 0.65f, stiffness = 420f), label = "segments")
+    SlidingSegments(options, pos, modifier, onTap = onSelect)
+}
+
+@Composable
+fun ChipRow(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    val p = LocalPalette.current
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        labels.forEachIndexed { i, l ->
+            val sel = i == selected
+            val bg by animateColorAsState(if (sel) p.primary else p.field, spring(stiffness = 500f), label = "chip")
+            Box(
+                Modifier.tap { onSelect(i) }
+                    .clip(CircleShape)
+                    .background(bg)
+                    .border(1.dp, if (sel) Color.Transparent else p.fieldStroke, CircleShape)
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+            ) { Text(l, color = if (sel) p.onPrimary else p.text, style = Type.label) }
+        }
+    }
+}
+
+/** Looks like an input: filled well, visible border, placeholder, red ring that eases in on focus. */
 @Composable
 fun Field(
     value: String,
@@ -295,6 +451,7 @@ fun Field(
     val p = LocalPalette.current
     val focus = LocalFocusManager.current
     var focused by remember { mutableStateOf(false) }
+    val ring by animateFloatAsState(if (focused) 1f else 0f, spring(stiffness = 500f), label = "ring")
     val shape = RoundedCornerShape(18.dp)
     BasicTextField(
         value = value,
@@ -309,7 +466,7 @@ fun Field(
             Row(
                 Modifier.fillMaxWidth()
                     .background(p.field, shape)
-                    .border(if (focused) 2.dp else 1.dp, if (focused) p.accent else p.fieldStroke, shape)
+                    .border((1f + ring).dp, lerp(p.fieldStroke, p.accent, ring), shape)
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -329,10 +486,10 @@ fun PickerRow(text: String, action: String, onClick: () -> Unit) {
     val shape = RoundedCornerShape(18.dp)
     Row(
         Modifier.fillMaxWidth()
+            .tap { onClick() }
             .background(p.field, shape)
             .border(1.dp, p.fieldStroke, shape)
             .clip(shape)
-            .tap { onClick() }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -345,10 +502,7 @@ fun PickerRow(text: String, action: String, onClick: () -> Unit) {
 @Composable
 fun IconTap(label: String, enabled: Boolean = true, action: () -> Unit) {
     val p = LocalPalette.current
-    Box(
-        Modifier.size(40.dp).clip(CircleShape).tap(enabled) { action() },
-        contentAlignment = Alignment.Center,
-    ) {
+    Box(Modifier.size(40.dp).tap(enabled) { action() }.clip(CircleShape), contentAlignment = Alignment.Center) {
         Text(label, color = if (enabled) p.text else p.dotOff, style = Type.title)
     }
 }
@@ -393,7 +547,10 @@ fun CompareView(before: ImageBitmap, after: ImageBitmap) {
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragStart = { frac = (it.x / size.width).coerceIn(0f, 1f) },
-                ) { change, _ -> frac = (change.position.x / size.width).coerceIn(0f, 1f) }
+                ) { change, _ ->
+                    change.consume()
+                    frac = (change.position.x / size.width).coerceIn(0f, 1f)
+                }
             },
     ) {
         Image(after, "After", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)

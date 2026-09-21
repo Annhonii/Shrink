@@ -1,13 +1,13 @@
-package com.example.shrink
+package com.davexh.shrinky
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import com.example.shrink.engine.Saver
-import com.example.shrink.ui.AppRoot
-import com.example.shrink.ui.ShrinkyTheme
+import com.davexh.shrinky.engine.Saver
+import com.davexh.shrinky.ui.AppRoot
+import com.davexh.shrinky.ui.ShrinkyTheme
 
 class MainActivity : ComponentActivity() {
     private val shrink: ShrinkVm by viewModels()

@@ -1,4 +1,4 @@
-package com.example.shrink.engine
+package com.davexh.shrinky.engine
 
 import java.io.ByteArrayOutputStream
 import java.util.Locale

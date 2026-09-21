@@ -1,4 +1,4 @@
-package com.example.shrink.engine
+package com.davexh.shrinky.engine
 
 import android.content.ContentResolver
 import android.graphics.Bitmap
@@ -84,5 +84,27 @@ object Images {
         if (fmt == OutFormat.JPG) c.drawColor(Color.WHITE)
         c.drawBitmap(region, Rect(0, 0, region.width, region.height), Rect(0, 0, outW, outH), Paint(Paint.FILTER_BITMAP_FLAG))
         return out
+    }
+
+    /**
+     * Same centre window from the original and from the result, both at the ORIGINAL pixel scale.
+     * A smaller/blurrier result shows up here exactly as it does when the saved file is opened at full size.
+     */
+    fun zoomPair(orig: Bitmap, result: Bitmap): Pair<Bitmap, Bitmap> {
+        val w = minOf(orig.width, 900)
+        val h = minOf(orig.height, 675)
+        val l = (orig.width - w) / 2
+        val t = (orig.height - h) / 2
+        val before = Bitmap.createBitmap(orig, l, t, w, h)
+        val after = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val k = result.width.toFloat() / orig.width
+        val src = Rect(
+            (l * k).roundToInt(),
+            (t * k).roundToInt(),
+            ((l + w) * k).roundToInt().coerceAtMost(result.width),
+            ((t + h) * k).roundToInt().coerceAtMost(result.height),
+        )
+        Canvas(after).drawBitmap(result, src, Rect(0, 0, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
+        return before to after
     }
 }

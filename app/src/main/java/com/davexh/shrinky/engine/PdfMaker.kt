@@ -1,4 +1,4 @@
-package com.example.shrink.engine
+package com.davexh.shrinky.engine
 
 import android.content.ContentResolver
 import android.net.Uri
