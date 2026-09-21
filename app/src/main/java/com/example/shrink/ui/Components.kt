@@ -9,7 +9,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -17,25 +16,30 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,14 +50,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.shrink.engine.Saver
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -73,6 +84,25 @@ fun delta(before: Double, after: Double): String {
     }
 }
 
+// ---------- press feedback (replaces clickable, which needs a Material ripple) ----------
+
+@Composable
+fun Modifier.tap(enabled: Boolean = true, action: () -> Unit): Modifier {
+    var pressed by remember { mutableStateOf(false) }
+    val current by rememberUpdatedState(action)
+    return this
+        .graphicsLayer { alpha = if (pressed) 0.6f else 1f }
+        .semantics(mergeDescendants = true) { role = Role.Button; onClick { current(); true } }
+        .pointerInput(enabled) {
+            if (enabled) {
+                detectTapGestures(
+                    onPress = { pressed = true; tryAwaitRelease(); pressed = false },
+                    onTap = { current() },
+                )
+            }
+        }
+}
+
 // ---------- layout ----------
 
 @Composable
@@ -87,15 +117,95 @@ fun SectionCard(title: String? = null, content: @Composable ColumnScope.() -> Un
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        if (title != null) Text(title, style = MaterialTheme.typography.labelLarge, color = p.mute)
+        if (title != null) Text(title, color = p.mute, style = Type.label)
         content()
     }
 }
 
 @Composable
-fun Divider() {
+fun Rule() {
     val p = LocalPalette.current
     Box(Modifier.fillMaxWidth().height(1.dp).background(p.stroke))
+}
+
+/** Scrolling body + sticky action bar. Scrolls to the end whenever [scrollTo] becomes non-null/changes. */
+@Composable
+fun ToolScaffold(
+    scrollTo: Any?,
+    bar: @Composable ColumnScope.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val p = LocalPalette.current
+    val scroll = rememberScrollState()
+    LaunchedEffect(scrollTo) {
+        if (scrollTo != null) {
+            withFrameNanos { }
+            scroll.animateScrollTo(scroll.maxValue)
+        }
+    }
+    Column(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.weight(1f).verticalScroll(scroll)
+                .padding(horizontal = 20.dp).padding(top = 4.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            content = content,
+        )
+        Column(
+            Modifier.fillMaxWidth().background(p.bg)
+                .padding(horizontal = 20.dp).padding(top = 8.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            content = bar,
+        )
+    }
+}
+
+/** One primary action that follows the flow: do the thing, then Save, then Saved. */
+@Composable
+fun ActionBar(
+    busy: Boolean,
+    hasResult: Boolean,
+    savedAs: String?,
+    primary: String,
+    primaryEnabled: Boolean,
+    onPrimary: () -> Unit,
+    onSave: () -> Unit,
+) {
+    val p = LocalPalette.current
+    when {
+        busy -> PillButton("Working...", enabled = false) {}
+        savedAs != null -> {
+            PillButton("Saved", enabled = false, style = PillStyle.Outlined) {}
+            Text(
+                savedAs, Modifier.fillMaxWidth(), color = p.mute, style = Type.small,
+                textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+        hasResult -> PillButton("Save") { onSave() }
+        else -> PillButton(primary, enabled = primaryEnabled) { onPrimary() }
+    }
+}
+
+@Composable
+fun StatusCards(busy: Boolean, failure: String?) {
+    val p = LocalPalette.current
+    if (busy) {
+        SectionCard {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                WorkingDots()
+                Text("Working", color = p.mute)
+            }
+        }
+    } else if (failure != null) {
+        SectionCard { Text(failure, color = p.accent) }
+    }
+}
+
+@Composable
+fun SaveCard(name: String, onName: (String) -> Unit, ext: String, pickFolder: () -> Unit) {
+    SectionCard("Save as") {
+        Field(name, onName, "File name", suffix = ".$ext", style = Type.title)
+        PickerRow(Saver.label, "Change", pickFolder)
+    }
 }
 
 // ---------- the memorable element: a dot grid that fills to show size ----------
@@ -141,11 +251,11 @@ fun PillButton(
             .clip(CircleShape)
             .background(bg)
             .then(if (!filled) Modifier.border(1.dp, p.fieldStroke, CircleShape) else Modifier)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .tap(enabled) { onClick() }
             .padding(horizontal = 24.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, color = fg, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(text, color = fg, style = Type.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -153,7 +263,7 @@ fun PillButton(
 fun Segmented(options: List<String>, selected: Int, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
     val p = LocalPalette.current
     Row(
-        modifier.clip(CircleShape).background(p.field)
+        modifier.fillMaxWidth().clip(CircleShape).background(p.field)
             .border(1.dp, p.fieldStroke, CircleShape).padding(4.dp),
     ) {
         options.forEachIndexed { i, label ->
@@ -161,11 +271,11 @@ fun Segmented(options: List<String>, selected: Int, modifier: Modifier = Modifie
             Box(
                 Modifier.weight(1f).clip(CircleShape)
                     .background(if (sel) p.text else Color.Transparent)
-                    .clickable { onSelect(i) }
+                    .tap { onSelect(i) }
                     .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(label, color = if (sel) p.bg else p.text, style = MaterialTheme.typography.labelLarge)
+                Text(label, color = if (sel) p.bg else p.text, style = Type.label, maxLines = 1)
             }
         }
     }
@@ -173,7 +283,15 @@ fun Segmented(options: List<String>, selected: Int, modifier: Modifier = Modifie
 
 /** Looks like an input: filled well, visible border, placeholder, red ring while focused. */
 @Composable
-fun SizeInput(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier) {
+fun Field(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    keyboard: KeyboardType = KeyboardType.Text,
+    style: TextStyle = Type.input,
+    suffix: String? = null,
+) {
     val p = LocalPalette.current
     val focus = LocalFocusManager.current
     var focused by remember { mutableStateOf(false) }
@@ -182,26 +300,57 @@ fun SizeInput(value: String, onValueChange: (String) -> Unit, modifier: Modifier
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
-        textStyle = MaterialTheme.typography.headlineSmall.copy(color = p.text),
+        textStyle = style.copy(color = p.text),
         cursorBrush = SolidColor(p.accent),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboard, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
         modifier = modifier.onFocusChanged { focused = it.isFocused },
         decorationBox = { inner ->
-            Box(
+            Row(
                 Modifier.fillMaxWidth()
                     .background(p.field, shape)
                     .border(if (focused) 2.dp else 1.dp, if (focused) p.accent else p.fieldStroke, shape)
                     .padding(horizontal = 16.dp, vertical = 14.dp),
-                contentAlignment = Alignment.CenterStart,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (value.isEmpty()) {
-                    Text("Enter size", style = MaterialTheme.typography.headlineSmall, color = p.mute)
+                Box(Modifier.weight(1f)) {
+                    if (value.isEmpty()) Text(placeholder, color = p.mute, style = style, maxLines = 1)
+                    inner()
                 }
-                inner()
+                if (suffix != null) Text(suffix, color = p.mute, style = style, maxLines = 1)
             }
         },
     )
+}
+
+@Composable
+fun PickerRow(text: String, action: String, onClick: () -> Unit) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(18.dp)
+    Row(
+        Modifier.fillMaxWidth()
+            .background(p.field, shape)
+            .border(1.dp, p.fieldStroke, shape)
+            .clip(shape)
+            .tap { onClick() }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.width(12.dp))
+        Text(action, style = Type.label)
+    }
+}
+
+@Composable
+fun IconTap(label: String, enabled: Boolean = true, action: () -> Unit) {
+    val p = LocalPalette.current
+    Box(
+        Modifier.size(40.dp).clip(CircleShape).tap(enabled) { action() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = if (enabled) p.text else p.dotOff, style = Type.title)
+    }
 }
 
 @Composable
@@ -216,24 +365,21 @@ fun WorkingDots() {
     }
 }
 
-// ---------- result ----------
+// ---------- results ----------
 
 @Composable
 fun StatRow(label: String, from: String, to: String? = null, delta: String? = null) {
     val p = LocalPalette.current
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(label, color = p.mute, style = MaterialTheme.typography.bodyMedium)
-            if (!delta.isNullOrEmpty()) Text(delta, color = p.accent, style = MaterialTheme.typography.labelLarge)
+            Text(label, color = p.mute)
+            if (!delta.isNullOrEmpty()) Text(delta, color = p.accent, style = Type.label)
         }
-        Text(
-            if (to == null) from else "$from  \u2192  $to",
-            color = p.text, style = MaterialTheme.typography.titleMedium,
-        )
+        Text(if (to == null) from else "$from  \u2192  $to", style = Type.title)
     }
 }
 
-/** Drag the handle to reveal Before (left) against After (right). */
+/** Drag to reveal Before (left) against After (right). */
 @Composable
 fun CompareView(before: ImageBitmap, after: ImageBitmap) {
     val p = LocalPalette.current
@@ -274,6 +420,6 @@ private fun Tag(text: String, modifier: Modifier) {
     Text(
         text,
         modifier.clip(CircleShape).background(Color(0x99000000)).padding(horizontal = 10.dp, vertical = 4.dp),
-        color = Color.White, style = MaterialTheme.typography.labelMedium,
+        color = Color.White, style = Type.small,
     )
 }

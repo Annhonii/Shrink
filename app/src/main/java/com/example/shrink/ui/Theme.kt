@@ -1,17 +1,21 @@
 package com.example.shrink.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 
 /** Nothing-style palette: monochrome surfaces with a single red signal. */
 @Immutable
@@ -45,19 +49,34 @@ val LightPalette = Palette(
 
 val LocalPalette = staticCompositionLocalOf { DarkPalette }
 
+/** System font, a handful of sizes. */
+object Type {
+    val headline = TextStyle(fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Medium)
+    val input = TextStyle(fontSize = 22.sp, lineHeight = 28.sp)
+    val title = TextStyle(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
+    val label = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
+    val body = TextStyle(fontSize = 14.sp, lineHeight = 20.sp)
+    val small = TextStyle(fontSize = 12.sp, lineHeight = 16.sp)
+}
+
+/** Tiny replacement for Material's Text, so the app doesn't need the Material library. */
 @Composable
-fun ShrinkTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
-    val p = if (dark) DarkPalette else LightPalette
-    val scheme = if (dark) {
-        darkColorScheme(background = p.bg, surface = p.bg, primary = p.text, onPrimary = p.bg, onBackground = p.text, onSurface = p.text)
-    } else {
-        lightColorScheme(background = p.bg, surface = p.bg, primary = p.text, onPrimary = p.bg, onBackground = p.text, onSurface = p.text)
-    }
+fun Text(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = LocalPalette.current.text,
+    style: TextStyle = Type.body,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Clip,
+    textAlign: TextAlign = TextAlign.Unspecified,
+) {
+    BasicText(text, modifier, style.copy(color = color, textAlign = textAlign), overflow = overflow, maxLines = maxLines)
+}
+
+@Composable
+fun ShrinkyTheme(content: @Composable () -> Unit) {
+    val p = if (isSystemInDarkTheme()) DarkPalette else LightPalette
     CompositionLocalProvider(LocalPalette provides p) {
-        // Default typography = system font.
-        MaterialTheme(colorScheme = scheme) {
-            Surface(color = p.bg, modifier = Modifier.fillMaxSize(), content = content)
-        }
+        Box(Modifier.fillMaxSize().background(p.bg)) { content() }
     }
 }

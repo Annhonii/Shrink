@@ -3,7 +3,13 @@ package com.example.shrink.engine
 import java.io.ByteArrayOutputStream
 import java.util.Locale
 
-class JpegPage(val jpeg: ByteArray, val pxW: Int, val pxH: Int, val ptW: Float, val ptH: Float)
+/** A page holding one JPEG, drawn at (x, y) with size (w, h) in points. Defaults fill the whole page. */
+class JpegPage(
+    val jpeg: ByteArray, val pxW: Int, val pxH: Int,
+    val ptW: Float, val ptH: Float,
+    val x: Float = 0f, val y: Float = 0f,
+    val w: Float = ptW, val h: Float = ptH,
+)
 
 /**
  * Minimal PDF writer that embeds each page as a raw JPEG (DCTDecode).
@@ -30,7 +36,7 @@ object PdfWriter {
                 s("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${p.ptW} ${p.ptH}] " +
                     "/Resources << /XObject << /Im0 $image 0 R >> >> /Contents $content 0 R >>")
             }
-            val draw = "q ${p.ptW} 0 0 ${p.ptH} 0 0 cm /Im0 Do Q"
+            val draw = "q ${p.w} 0 0 ${p.h} ${p.x} ${p.y} cm /Im0 Do Q"
             obj(content) { s("<< /Length ${draw.length} >>\nstream\n$draw\nendstream") }
             obj(image) {
                 s("<< /Type /XObject /Subtype /Image /Width ${p.pxW} /Height ${p.pxH} " +
