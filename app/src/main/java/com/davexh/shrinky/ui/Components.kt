@@ -229,7 +229,7 @@ fun ActionBar(
     val p = LocalPalette.current
     val state = when {
         busy -> Bar.Busy
-        savedAs != null -> Bar.Saved
+        hasResult && savedAs != null -> Bar.Saved
         hasResult -> Bar.Save
         else -> Bar.Primary
     }

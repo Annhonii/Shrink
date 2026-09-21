@@ -74,7 +74,7 @@ class ShrinkVm(app: Application) : BaseVm(app) {
     val targetBytes: Long
         get() = ((targetText.toDoubleOrNull() ?: 0.0) * if (unitMb) 1_048_576.0 else 1024.0).toLong()
 
-    private fun stale() { result = null; failure = null }
+    private fun stale() { result = null; failure = null; save.savedAs = null }
 
     fun onTargetText(v: String) { targetText = v.filter { it.isDigit() || it == '.' }.take(7); stale() }
     fun onUnit(mb: Boolean) { unitMb = mb; stale() }
@@ -99,6 +99,7 @@ class ShrinkVm(app: Application) : BaseVm(app) {
             }
             result = null
             failure = null
+            save.savedAs = null
         }
     }
 
@@ -108,6 +109,7 @@ class ShrinkVm(app: Application) : BaseVm(app) {
         if (t < 5 * 1024) { failure = "Target must be at least 5 KB."; return }
         val f = format
         result = null
+        save.savedAs = null
         work {
             result = Engine.compress(cr, s.uri, s.kind, s.mime, s.bytes, t, f)
             save.reset(s.name.substringBeforeLast('.') + "_shrunk")
@@ -151,7 +153,7 @@ class CropVm(app: Application) : BaseVm(app) {
     }
 
     private fun refreshAspect() {
-        result = null; failure = null
+        result = null; failure = null; save.savedAs = null
         if (mode == 0) editor.setAspect(wText.toIntOrNull() ?: 0, hText.toIntOrNull() ?: 0)
         else { val (a, b) = ratioPair(); editor.setAspect(a, b) }
     }
@@ -167,7 +169,7 @@ class CropVm(app: Application) : BaseVm(app) {
     }
     fun onCustomW(v: String) { customW = v.filter { it.isDigit() }.take(3); syncRatioChip(); refreshAspect() }
     fun onCustomH(v: String) { customH = v.filter { it.isDigit() }.take(3); syncRatioChip(); refreshAspect() }
-    fun onFormat(f: OutFormat) { format = f; result = null; failure = null }
+    fun onFormat(f: OutFormat) { format = f; result = null; failure = null; save.savedAs = null }
 
     fun pick(uri: Uri?) {
         uri ?: return
@@ -230,7 +232,7 @@ class PdfVm(app: Application) : BaseVm(app) {
     var result by mutableStateOf<PdfResult?>(null); private set
     private var nextId = 0L
 
-    private fun stale() { result = null; failure = null }
+    private fun stale() { result = null; failure = null; save.savedAs = null }
 
     fun add(uris: List<Uri>) {
         if (uris.isEmpty()) return
