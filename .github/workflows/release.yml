@@ -27,35 +27,20 @@ jobs:
       - name: Restore signing key
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-        run: |
-          if [ -n "$KEYSTORE_BASE64" ]
+        run: '[ -z "$KEYSTORE_BASE64" ] || { echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks" && echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"; }'
+
       - name: Build release APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          if [ -f ./gradlew ]; then
-            chmod +x ./gradlew
-            ./gradlew --no-daemon assembleRelease
-          else
-            gradle --no-daemon assembleRelease
-          fi
+        run: 'if [ -f ./gradlew ]; then chmod +x ./gradlew && ./gradlew --no-daemon assembleRelease; else gradle --no-daemon assembleRelease; fi'
 
       - name: Rename APK
-        run: |
-          APK=$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)
-          test -n "$APK"
-          cp "$APK" shrinky.apk
-          ls -l shrinky.apk
+        run: cp "$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)" shrinky.apk
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
           NOTES: ${{ github.event.head_commit.message }}
-        run: |
-          gh release create "build-${{ github.run_number }}" shrinky.apk \
-            --title "Shrinky \
-            --notes "${NOTES:-Automated build}" \
-            --target "${{ github.sha }}" \
-            --latest
+        run: gh release create "build-${{ github.run_number }}" shrinky.apk --title "Shrinky build ${{ github.run_number }}" --notes "${NOTES:-Automated build}" --target "${{ github.sha }}" --latest
